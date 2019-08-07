@@ -4,36 +4,48 @@
 // @description Show unread count in title
 // @include     https://*/owa/*
 // @include     http://*/owa/*
-// @version     1
+// @version     2
 // @grant       none
 // ==/UserScript==
-(function() {
-    var updateIntervalInMin = 1;
-    var appendOriginalTitle = true;
 
-    var originalTitle = unsafeWindow.document.title;
-    var setTitleFunc = function(title) {
-        window.document.title = (title != undefined ? title + " " : "") + (appendOriginalTitle ? originalTitle : "");
+setTimeout(function () {
+    let intervalId;
+    let updateIntervalInMin = 1;
+    let appendOriginalTitle = true;
+    let originalTitle = document.title;
+    let ignoredFolders = Array('drafts', 'deleted items');
+
+    let setTitleFunc = function (title) {
+
+        let unreadCountTitle = [];
+        Object.keys(title).forEach(function (key, index) {
+            if (!ignoredFolders.includes(key.toLowerCase())) {
+                unreadCountTitle.push(key + ': ' + title[key]);
+            }
+        });
+        window.document.title = (title != undefined ? unreadCountTitle.join(', ') + " " : "") + (appendOriginalTitle ? originalTitle : "");
     };
-    var setCount = function(c) {
-        var mailtreePath = "//div[@id='mailtree']";
-        var mailtree = document.evaluate(mailtreePath, document, null, XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE, null);
-        if(mailtree.snapshotLength > 0) {
-//            console.log("Valid x-path for setCount(...)");
-            if(!c) { 
-//            console.log("Setting update interval...");
-                setInterval(function() { setCount(true) }, (updateIntervalInMin * 60) * 1000);
+    let setCount = function (c) {
+        let ucountXPath = "//span[contains(@id, 'ucount')]"
+        let ucountNodes = document.evaluate(ucountXPath, document, null, XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE, null);
+
+        if (ucountNodes.snapshotLength > 0) {
+            if (!c) {
+                intervalId = setInterval(function () {
+                    setCount(true)
+                }, (updateIntervalInMin * 60) * 1000);
             }
-            var path = mailtreePath + "//img[@class[contains(., 'sprites-inbox-png')]]/following-sibling::span[1]/span[@id='spnUC']/span[@id='spnCV']";
-            var data = document.evaluate(path, document, null, XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE, null);
-            if(data.snapshotLength > 0) {
-                setTitleFunc("(" + data.snapshotItem(0).innerHTML+ ")");
-            } else {
-                setTitleFunc(undefined);
+
+            let set = {};
+
+            for (let i = 0; i < ucountNodes.snapshotLength; i++) {
+                let folderName = document.getElementById(ucountNodes.snapshotItem(i).id.replace('ucount', 'folder')).textContent;
+                set[folderName] = ucountNodes.snapshotItem(i).textContent.match('[0-9]+')[0];
             }
-        } else {
-//            console.log("NOT setting update interval...")
+            setTitleFunc(set);
+        } else if (intervalId && document.getElementsByClassName('logonContainer').length > 0) {
+            clearInterval(intervalId);
         }
     };
     setCount(false);
-})();
+}, 5000)
